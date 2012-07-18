@@ -3,8 +3,8 @@ Version:        0.1.2
 build-type:     Simple
 License:        GPL-2
 License-File:   LICENSE
-Author:         HAILS team
-Maintainer:     HAILS team <hails at scs.stanford dot edu>
+Author:         HAils team
+Maintainer:     Hails team <hails at scs.stanford dot edu>
 Stability:      experimental
 Synopsis:       Git project management and repository access
 Category:       Web
