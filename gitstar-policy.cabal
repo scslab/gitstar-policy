@@ -1,4 +1,4 @@
-Name:           gitstar
+Name:           gitstar-policy
 Version:        0.1.2
 build-type:     Simple
 License:        GPL-2
@@ -27,7 +27,8 @@ Library
   Extensions: Safe
 
   Exposed-modules:
-    Policy.Gitstar
+    Gitstar.Policy
+    Gitstar.Models
     Gitstar.Repo
     Gitstar.Repo.Types
   Other-modules:

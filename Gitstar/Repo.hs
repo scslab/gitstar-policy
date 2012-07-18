@@ -27,7 +27,7 @@ module Gitstar.Repo ( -- * Branches and refs
                     ) where
 
 import Prelude hiding (lookup)
-import Policy.Gitstar
+import Gitstar.Policy
 
 import Control.Monad
 
