@@ -2,22 +2,28 @@
 module Gitstar.Models (
   -- * Projects model
     ProjectId, ProjectName, Project(..), Public(..), isPublic
+  , projectRepository, projectObjId
   -- * App model
   , GitstarApp(..)
   -- * Users
   , UserName, Url, User(..)
   -- * Keys
-  , KeyId, SSHKey(..)
+  , KeyId, SSHKey(..), fingerprint
   ) where
 
-import Prelude hiding (lookup)
+import           Prelude hiding (lookup)
 
-import Data.Maybe
-import Hails.Data.LBson hiding ( map, head, break
-                               , tail, words, key, filter
-                               , dropWhile, drop, split, foldl
-                               , notElem, isInfixOf)
-import Hails.Database.MongoDB.Structured
+import qualified Data.ByteString.Base64 as B64
+import qualified Data.ByteString.Char8 as S8
+import qualified Data.ByteString.Lazy.Char8 as L8
+import           Data.Maybe
+
+import           Hails.Crypto (md5)
+import           Hails.Data.LBson hiding ( map, head, break
+                                         , tail, words, key, filter
+                                         , dropWhile, drop, split, foldl
+                                         , notElem, isInfixOf)
+import           Hails.Database.MongoDB.Structured
 
 
 --
@@ -56,9 +62,17 @@ data Project = Project {
 -- | Data type denoting public projects
 data Public = Public deriving (Show, Read)
 
--- | Is the project public
+-- | Is the project publicly readable.
 isPublic :: Project -> Bool
-isPublic = (either (const True) (const False)) . projectReaders
+isPublic proj = either (const True) (const False) $ projectReaders proj
+
+-- | Project repository path.
+projectRepository :: Project -> String
+projectRepository proj = projectOwner proj ++ "/" ++ projectName proj ++ ".git"
+
+-- | get Project id of an already inserted project. Error otherwise
+projectObjId :: Project -> ObjectId
+projectObjId = fromJust . projectId
 
 instance DCRecord Project where
   fromDocument doc = do
@@ -229,3 +243,18 @@ instance DCRecord SSHKey where
                  , (u "value") =: sshKeyValue k ]
   collectionName = error "Not insertable"
 
+-- | Generate the SSH fingerprint format for the 'SSHKey' based on
+-- draft-ietf-secsh-fingerprint-00 (matches output from
+-- ssh-keygen -lf [pubkey_file])
+fingerprint :: SSHKey -> String
+fingerprint key = separate . show $ md5 keyData
+  where keyData = lazyfy $ B64.decodeLenient key64
+        key64 = case S8.words keyVal of
+                  (_:blob:_) -> blob
+                  [blob]     -> blob
+                  _          -> S8.empty
+        keyVal = case sshKeyValue key of
+                   (Binary bs) -> bs
+        separate (a:b:c:xs) = a:b:':':separate (c:xs)
+        separate a = a
+        lazyfy = L8.pack . S8.unpack
