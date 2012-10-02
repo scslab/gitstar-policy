@@ -11,10 +11,11 @@ module Config ( gitstar_ssh_web_url
 
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Base64 as B64
+import Data.Text as T
 
 -- | Url to the gitstar ssh API server
-gitstar_ssh_web_url :: String
-gitstar_ssh_web_url = "http://localhost:9292/"
+gitstar_ssh_web_url :: Text
+gitstar_ssh_web_url = T.pack "http://localhost:9292/"
 
 -- | Authorization for accessing server
 gitstar_ssh_web_authorization :: S8.ByteString

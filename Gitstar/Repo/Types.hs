@@ -23,10 +23,11 @@ module Gitstar.Repo.Types ( Repo(..)
                           ) where
 
 import Data.ByteString (ByteString)
+import Data.Text (Text)
 import System.Posix.Types (FileMode)
 
-data Repo = Repo { repoName  :: String -- ^ Project name
-                 , repoOwner :: String -- ^ Project owner
+data Repo = Repo { repoName  :: Text -- ^ Project name
+                 , repoOwner :: Text -- ^ Project owner
                  } deriving (Eq, Show)
 
 -- | SHA1 digest

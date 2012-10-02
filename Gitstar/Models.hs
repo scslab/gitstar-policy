@@ -9,22 +9,21 @@ module Gitstar.Models (
   , UserName, Url, User(..)
   -- * Keys
   , KeyId, SSHKey(..), fingerprint
+  , sshKeyToBson, sshKeyFromDocument
   ) where
 
 import           Prelude hiding (lookup)
 
+import qualified Crypto.Hash.MD5 as MD5
 import qualified Data.ByteString.Base64 as B64
 import qualified Data.ByteString.Char8 as S8
-import qualified Data.ByteString.Lazy.Char8 as L8
 import           Data.Maybe
+import           Data.Text (Text)
+import qualified Data.Text as T
 
-import           Hails.Crypto (md5)
-import           Hails.Data.LBson hiding ( map, head, break
-                                         , tail, words, key, filter
-                                         , dropWhile, drop, split, foldl
-                                         , notElem, isInfixOf)
-import           Hails.Database.MongoDB.Structured
-
+import           Hails.Data.Hson
+import           Hails.Database.Structured
+import           Data.Hex
 
 --
 -- Projects
@@ -36,7 +35,7 @@ import           Hails.Database.MongoDB.Structured
 type ProjectId = Maybe ObjectId
 
 -- | Project name is simply a stirng
-type ProjectName = String
+type ProjectName = Text
 
 -- | A data type describing a project
 data Project = Project {
@@ -46,7 +45,7 @@ data Project = Project {
     -- ^ Project name
   , projectOwner         :: UserName
     -- ^ Project owner
-  , projectDescription   :: String
+  , projectDescription   :: Text
     -- ^ Project descritption
   , projectCollaborators :: [UserName]
     -- ^ Project collaborators that can read and write to repository
@@ -67,29 +66,30 @@ isPublic :: Project -> Bool
 isPublic proj = either (const True) (const False) $ projectReaders proj
 
 -- | Project repository path.
-projectRepository :: Project -> String
-projectRepository proj = projectOwner proj ++ "/" ++ projectName proj ++ ".git"
+projectRepository :: Project -> Text
+projectRepository proj = T.concat [projectOwner proj, "/", projectName proj, ".git"]
 
 -- | get Project id of an already inserted project. Error otherwise
 projectObjId :: Project -> ObjectId
 projectObjId = fromJust . projectId
 
 instance DCRecord Project where
+  recordCollection _ = "projects"
   fromDocument doc = do
-    pName  <- lookup (u "name") doc
-    pOwner <- lookup (u "owner") doc
-    let pDesc  = fromMaybe "" $ lookup (u "description") doc
-        pColls = fromMaybe [] $ lookup (u "collaborators") doc
-        pRedrs = fromMaybe [] $ lookup (u "readers") doc
-        pPub = case look (u "public") doc of
-                Just v | v == (val True) -> True
-                       | v == (val ("1" :: String)) -> True
+    pName  <- lookup "name" doc
+    pOwner <- lookup "owner" doc
+    let pDesc  = fromMaybe "" $ lookup "description" doc
+        pColls = fromMaybe [] $ lookup "collaborators" doc
+        pRedrs = fromMaybe [] $ lookup "readers" doc
+        pPub = case look "public" doc of
+                Just v | v == toHsonValue True -> True
+                       | v == toHsonValue ("1" :: String) -> True
                        | otherwise -> False
                 Nothing -> False
-        pApps = fromMaybe [] $ lookup (u "apps") doc
+        pApps = fromMaybe [] $ lookup "apps" doc
 
     return $ Project
-      { projectId            = lookup (u "_id") doc
+      { projectId            = lookup "_id" doc
       , projectName          = pName 
       , projectOwner         = pOwner
       , projectDescription   = pDesc
@@ -98,24 +98,22 @@ instance DCRecord Project where
                                 Left Public
                                 else Right pRedrs
       , projectApps          = pApps
-      , projectForkedFrom    = lookup (u "forked_from") doc
+      , projectForkedFrom    = lookup "forked_from" doc
       }
 
   toDocument proj =
-    (maybe [] (\i -> [(u "_id") =: i]) $ projectId proj)
+    (maybe [] (\i -> ["_id" -: i]) $ projectId proj)
     ++
-    [ (u "name")          =: projectName proj
-    , (u "owner")         =: projectOwner proj
-    , (u "description")   =: projectDescription proj
-    , (u "collaborators") =: projectCollaborators proj
-    , (u "readers")       =: either (const []) id (projectReaders proj)
-    , (u "public")        =: either (const True) (const False) (projectReaders proj)
-    , (u "apps")          =: projectApps proj
-    , (u "forked_from")   =: projectForkedFrom proj]
+    [ "name"          -: projectName proj
+    , "owner"         -: projectOwner proj
+    , "description"   -: projectDescription proj
+    , "collaborators" -: projectCollaborators proj
+    , "readers"       -: either (const []) id (projectReaders proj)
+    , "public"        -: either (const True) (const False) (projectReaders proj)
+    , "apps"          -: projectApps proj
+    , "forked_from"   -: projectForkedFrom proj]
 
-  collectionName _ = "projects"
-
-instance DCLabeledRecord Project where
+--instance DCLabeledRecord GitstarPolicy Project where
 
 
 --
@@ -124,31 +122,31 @@ instance DCLabeledRecord Project where
 
 -- | A gitstar app.
 data GitstarApp = GitstarApp {
-    appId          :: String
+    appId          :: Text
   -- ^ Unique name for the app (not displayed to user)
-  , appName        :: String
+  , appName        :: Text
   -- ^ Descriptive name of app (used to search for apps)
-  , appTitle       :: String
+  , appTitle       :: Text
   -- ^ App title, to be displayed on project tabs
   , appUrl         :: Url
   -- ^ App url, containing @$user@ and @$project@ to be replaced by
   -- current user an app
   , appOwner       :: UserName
   -- ^ App owner
-  , appDescription :: String
+  , appDescription :: Text
   -- ^ App description
 } deriving (Show)
 
 
 instance DCRecord GitstarApp where
-  collectionName = const "apps"
+  recordCollection _ = "apps"
   fromDocument doc = do
-    aId <- lookup (u "_id") doc
-    aName <- lookup (u "name") doc
-    aTitle <- lookup (u "title") doc
-    aUrl  <- lookup (u "url") doc
-    aOwner  <- lookup (u "owner") doc
-    aDescription <- lookup (u "description") doc
+    aId <- lookup "_id" doc
+    aName <- lookup "name" doc
+    aTitle <- lookup "title" doc
+    aUrl  <- lookup "url" doc
+    aOwner  <- lookup "owner" doc
+    aDescription <- lookup "description" doc
     return $ GitstarApp
       { appId = aId
       , appName = aName
@@ -159,63 +157,61 @@ instance DCRecord GitstarApp where
       }
 
   toDocument app =
-    [ "_id" =: (appId app)
-    , "name" =: (appName app)
-    , "title" =: (appTitle app)
-    , "owner" =: (appOwner app)
-    , "description" =: (appDescription app)
-    , "url" =: (appUrl app)]
+    [ "_id" -: (appId app)
+    , "name" -: (appName app)
+    , "title" -: (appTitle app)
+    , "owner" -: (appOwner app)
+    , "description" -: (appDescription app)
+    , "url" -: (appUrl app)]
 
 --
 -- Users
 --
 
 -- | User name is simply  a stirng
-type UserName = String
+type UserName = Text
 
 -- | Email address of a user
-type Email = String
+type Email = Text
 
 -- | URL
-type Url = String
+type Url = Text
 
 -- | Data type describing users
 data User = User { userName     :: UserName     -- ^ Username
                  , userKeys     :: [SSHKey]     -- ^ User's ssh keys
                  , userProjects :: [ProjectId]  -- ^ User's projects
-                 , userFullName :: Maybe String -- ^ User's full name
-                 , userCity     :: Maybe String -- ^ User's location
+                 , userFullName :: Maybe Text   -- ^ User's full name
+                 , userCity     :: Maybe Text   -- ^ User's location
                  , userWebsite  :: Maybe Url    -- ^ User's website
                  , userGravatar :: Maybe Email  -- ^ User's gravatar e-mail
                  } deriving (Show, Eq)
 
 instance DCRecord User where
+  recordCollection _ = "users"
   fromDocument doc = do
-    uName   <- lookup (u "_id") doc
-    keyDocs <- lookup (u "keys") doc
-    keys <- case mapM safeFromBsonDoc keyDocs of
-               Nothing -> fail "fromDocument: safeFromBsonDoc failed"
-               Just ks -> mapM fromDocument ks
-    uPrjs <- lookup (u "projects") doc
+    uName   <- lookup "_id" doc
+    keyDocs <- lookup "keys" doc
+    keys <- mapM sshKeyFromDocument keyDocs
+    (HsonValue (BsonArray uPrjs)) <- look "projects" doc
+    let prjs = map (\(BsonObjId o) -> Just o) uPrjs
     return $ User { userName      = uName
                   , userKeys      = keys
-                  , userProjects  = uPrjs
-                  , userFullName = lookup (u "full_name") doc
-                  , userCity = lookup (u "city") doc
-                  , userWebsite = lookup (u "website") doc
-                  , userGravatar = lookup (u "gravatar") doc}
+                  , userProjects  = prjs
+                  , userFullName = lookup "full_name" doc
+                  , userCity = lookup "city" doc
+                  , userWebsite = lookup "website" doc
+                  , userGravatar = lookup "gravatar" doc}
 
-  toDocument usr = [ (u "_id")       =: userName usr
-                   , (u "keys")      =: (map sshKeyToDoc $ userKeys usr)
-                   , (u "projects")  =: userProjects usr
-                   , (u "full_name") =: userFullName usr
-                   , (u "city")      =: userCity usr
-                   , (u "website")   =: userWebsite usr
-                   , (u "gravatar")  =: userGravatar usr]
-    where sshKeyToDoc = (fromJust . safeToBsonDoc . toDocument)
-  collectionName _ = "users"
+  toDocument usr = [ "_id"       -: (userName usr)
+                   , "keys"      -: (map sshKeyToBson $ userKeys usr)
+                   , "projects"  -: (userProjects usr)
+                   , "full_name" -: (userFullName usr)
+                   , "city"      -: (userCity usr)
+                   , "website"   -: (userWebsite usr)
+                   , "gravatar"  -: (userGravatar usr)]
 
-instance DCLabeledRecord User where
+--instance DCLabeledRecord User where
 
 --
 -- Keys
@@ -225,30 +221,34 @@ instance DCLabeledRecord User where
 type KeyId = ObjectId
 
 -- | An SSH key has a name and key value
-data SSHKey = SSHKey { sshKeyId    :: KeyId    -- ^ Key id
-                     , sshKeyTitle :: !String  -- ^ Name
+data SSHKey = SSHKey { sshKeyId    :: Maybe KeyId    -- ^ Key id
+                     , sshKeyTitle :: !Text  -- ^ Name
                      , sshKeyValue :: !Binary  -- ^ Actual key
                      } deriving (Show, Eq)
 
-instance DCRecord SSHKey where
-  fromDocument doc = do
-    i <- lookup (u "_id") doc
-    t <- lookup (u "title") doc
-    v <- lookup (u "value")  doc
-    return SSHKey { sshKeyId = i
-                  , sshKeyTitle = t
-                  , sshKeyValue = v }
-  toDocument k = [ (u "_id")   =: sshKeyId k
-                 , (u "title") =: sshKeyTitle k
-                 , (u "value") =: sshKeyValue k ]
-  collectionName = error "Not insertable"
+sshKeyToBson :: SSHKey -> BsonDocument
+sshKeyToBson k =
+  [ BsonField "_id" (toBsonValue $ fmap BsonObjId $ sshKeyId k)
+  , BsonField "title" (BsonString $ sshKeyTitle k)
+  , BsonField "value" (BsonBlob $ sshKeyValue k)]
+
+
+sshKeyFromDocument :: Monad m => BsonDocument -> m SSHKey
+sshKeyFromDocument doc = do
+  let kid = lookup "_id" doc
+  title <- lookup "title" doc
+  val <- lookup "value" doc
+  return $
+    SSHKey { sshKeyId = kid
+           , sshKeyTitle = title
+           , sshKeyValue = val }
 
 -- | Generate the SSH fingerprint format for the 'SSHKey' based on
 -- draft-ietf-secsh-fingerprint-00 (matches output from
 -- ssh-keygen -lf [pubkey_file])
 fingerprint :: SSHKey -> String
-fingerprint key = separate . show $ md5 keyData
-  where keyData = lazyfy $ B64.decodeLenient key64
+fingerprint key = separate . S8.unpack . hex $ MD5.hash keyData
+  where keyData = B64.decodeLenient key64
         key64 = case S8.words keyVal of
                   (_:blob:_) -> blob
                   [blob]     -> blob
@@ -257,4 +257,4 @@ fingerprint key = separate . show $ md5 keyData
                    (Binary bs) -> bs
         separate (a:b:c:xs) = a:b:':':separate (c:xs)
         separate a = a
-        lazyfy = L8.pack . S8.unpack
+

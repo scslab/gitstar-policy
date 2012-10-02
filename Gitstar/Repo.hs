@@ -33,17 +33,12 @@ import Control.Monad
 
 import LIO.DCLabel
 
-import qualified Hails.Data.LBson.Rexports.Bson as Bson
-import Hails.Database.MongoDB hiding ( Action
-                                     , concatMap
-                                     , map
-                                     , drop
-                                     , isPrefixOf
-                                     , length)
-
+import qualified Data.Bson as Bson
 import Data.List (isPrefixOf)
+import Data.Monoid (mappend)
 
 import qualified Data.ByteString.Char8 as S8
+import qualified Data.Text as T
 
 import Gitstar.Repo.Types
 
@@ -55,8 +50,8 @@ getBranches proj = do
   mdoc   <- gitstarRepoHttp (repoOwner proj)
                             (repoName proj) "/branches"
   case mdoc of
-    Just ds -> let vs = concatMap (\(_ Bson.:= (Array v)) -> v) ds
-               in return $ forM vs $ \(Doc d) -> do
+    Just ds -> let vs = concatMap (\(_ Bson.:= (Bson.Array v)) -> v) ds
+               in return $ forM vs $ \(Bson.Doc d) -> do
                     n <- Bson.lookup "name" d
                     c <- Bson.lookup "commit" d
                     s <- Bson.lookup "sha" c
@@ -67,7 +62,7 @@ getBranches proj = do
 getBlob :: Repo -> SHA1 -> DC (Maybe GitBlob)
 getBlob proj sha = do
   mdoc <- gitstarRepoHttp (repoOwner proj)
-                          (repoName proj) $ "/git/blobs/" ++ show sha
+                          (repoName proj) $ T.pack $ "/git/blobs/" ++ show sha
   case mdoc of
     Just doc -> return $ do
       d <- Bson.lookup "data" doc
@@ -82,7 +77,7 @@ getBlob proj sha = do
 getTag :: Repo -> SHA1 -> DC (Maybe GitTag)
 getTag proj sha = do
   mdoc <- gitstarRepoHttp (repoOwner proj)
-                          (repoName proj) $ "/git/tags/" ++ show sha
+                          (repoName proj) $ T.pack $ "/git/tags/" ++ show sha
   case mdoc of
     Just doc -> return $ do
       d       <- Bson.lookup "data" doc
@@ -112,8 +107,8 @@ getTags :: Repo -> DC (Maybe [(String, SHA1)])
 getTags proj = do
   mdoc   <- gitstarRepoHttp (repoOwner proj) (repoName proj) "/tags"
   case mdoc of
-    Just ds -> let vs = concatMap (\(_ Bson.:= Array v) -> v) ds
-               in return $ forM vs $ \(Doc d) -> do
+    Just ds -> let vs = concatMap (\(_ Bson.:= Bson.Array v) -> v) ds
+               in return $ forM vs $ \(Bson.Doc d) -> do
                     n <- Bson.lookup "name" d
                     c <- Bson.lookup "commit" d
                     s <- Bson.lookup "sha" c
@@ -125,7 +120,7 @@ getTags proj = do
 getCommit :: Repo -> SHA1 -> DC (Maybe GitCommit)
 getCommit proj sha = do
   mdoc <- gitstarRepoHttp (repoOwner proj)
-                          (repoName proj) $ "/git/commits/" ++ show sha
+                          (repoName proj) $ T.pack $ "/git/commits/" ++ show sha
   case mdoc of
     Just doc -> return $ do
       d         <- Bson.lookup "data" doc
@@ -149,7 +144,7 @@ getCommit proj sha = do
 getTree :: Repo -> SHA1 -> DC (Maybe GitTree)
 getTree proj sha = do
   mdoc <- gitstarRepoHttp (repoOwner proj)
-                          (repoName proj) $ "/git/trees/" ++ show sha
+                          (repoName proj) $ T.pack $ "/git/trees/" ++ show sha
   case mdoc of
     Just doc -> return $ do d  <- Bson.lookup "data" doc
                             ps <- Bson.lookup "tree" d
@@ -191,7 +186,7 @@ readGitMode s | s == "040000"        = Directory
 getRefs :: Repo -> Url -> DC (Maybe [GitRef])
 getRefs proj suffix = do
   mdoc   <- gitstarRepoHttp (repoOwner proj) 
-                            (repoName proj) $ "/git/refs" ++ suffix
+                            (repoName proj) $ "/git/refs" `mappend` suffix
   case mdoc of
     Just doc -> return $ do rs  <- Bson.lookup "data" doc
                             mapM mkRef rs
@@ -213,7 +208,7 @@ mkRef d = do
 getDiffs :: Repo -> SHA1 -> DC (Maybe [GitDiff])
 getDiffs proj sha = do
   mdoc   <- gitstarRepoHttp (repoOwner proj) 
-                            (repoName proj) $ "/git/commits/" ++ show sha
+                            (repoName proj) $ T.pack $ "/git/commits/" ++ show sha
                                                               ++ "/diff"
   case mdoc of
     Just doc -> return $ do
@@ -242,7 +237,7 @@ getDiffs proj sha = do
 getStats :: Repo -> SHA1 -> DC (Maybe GitStats)
 getStats proj sha = do
   mdoc   <- gitstarRepoHttp (repoOwner proj)
-                            (repoName proj) $ "/git/commits/" ++ show sha
+                            (repoName proj) $ T.pack $ "/git/commits/" ++ show sha
                                                               ++ "/stats"
   case mdoc of
     Just doc -> return $ do
@@ -273,7 +268,7 @@ getStats proj sha = do
 getBlame :: Repo -> SHA1 -> FilePath -> DC (Maybe GitBlame)
 getBlame proj sha file = do
   mdoc   <- gitstarRepoHttp (repoOwner proj)
-                            (repoName proj) $ "/git/blame/" ++ show sha
+                            (repoName proj) $ T.pack $ "/git/blame/" ++ show sha
                                                             ++ "/" ++ file
   case mdoc of
     Just doc -> return $ do
