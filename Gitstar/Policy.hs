@@ -45,8 +45,6 @@ import LIO
 import LIO.DCLabel
 import Gitstar.Models
 
-import Debug.Trace
-
 -- | Internal gitstar policy. The type constructor should not be
 -- exported as to avoid leaking the privilege.
 data GitstarPolicy = GitstarPolicyP DCPriv
@@ -137,20 +135,18 @@ partialUserUpdate uName ldoc = liftLIO $ do
                      , userGravatar = lookup "gravatar" doc }
     let lbl = (labelOf ldoc) {
                 dcIntegrity = (dcIntegrity lbl) \/ (privDesc priv) }
-    trace (show lbl) $ labelP priv lbl user
-
+    labelP priv lbl user
 
 getOrCreateUser :: MonadLIO DCLabel m => UserName -> m User
-getOrCreateUser username = do
-  muser <- withGitstar $ do
-            (find $ select [ "_id" -: username ] "users") >>= next
+getOrCreateUser username = liftLIO $ withPolicyModule $ \(GitstarPolicyP priv) -> do
+  muser <- (find $ select [ "_id" -: username ] "users") >>= next
   case muser of
     Just luser -> do
       user <- unlabel luser
       fromDocument user
     Nothing -> do
       let user = User username [] [] Nothing Nothing Nothing Nothing
-      withGitstar $ insert_ "users" (toDocument user)
+      insertP_ priv "users" (toDocument user)
       return user
 
 delUserKey :: MonadLIO DCLabel m => UserName -> DCLabeled Document -> m (DCLabeled User)
@@ -204,7 +200,7 @@ partialProjectUpdate uName projName ldoc = liftLIO $
                 }
     let lbl0 = labelOf ldoc
     let lbl = lbl0 { dcIntegrity = (dcIntegrity lbl0) \/ (privDesc priv) }
-    trace (show lbl) $ labelP priv lbl proj
+    labelP priv lbl proj
 
 -- | Given a user name and project ID, associate the project with the
 -- user, if it's not already.

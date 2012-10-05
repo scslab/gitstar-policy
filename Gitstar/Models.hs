@@ -6,7 +6,7 @@ module Gitstar.Models (
   -- * App model
   , GitstarApp(..)
   -- * Users
-  , UserName, Url, User(..)
+  , UserName, Url, User(..), newUser
   -- * Keys
   , KeyId, SSHKey(..), fingerprint
   , sshKeyToBson, sshKeyFromDocument
@@ -186,6 +186,15 @@ data User = User { userName     :: UserName     -- ^ Username
                  , userWebsite  :: Maybe Url    -- ^ User's website
                  , userGravatar :: Maybe Email  -- ^ User's gravatar e-mail
                  } deriving (Show, Eq)
+
+newUser :: UserName -> User 
+newUser uName = User { userName = uName
+                     , userKeys = []
+                     , userProjects = []
+                     , userFullName = Nothing
+                     , userCity = Nothing
+                     , userWebsite = Nothing
+                     , userGravatar = Nothing }
 
 instance DCRecord User where
   recordCollection _ = "users"
