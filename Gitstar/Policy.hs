@@ -176,29 +176,27 @@ addUserKey uName ldoc = liftLIO $ do
 --
 -- Project related
 --
-mkProject :: MonadLIO DCLabel m => UserName -> DCLabeled Document -> m (DCLabeled Project)
-mkProject owner ldoc = liftLIO $ do
+mkProject :: MonadLIO DCLabel m => DCLabeled Document -> m (DCLabeled Project)
+mkProject ldoc = liftLIO $ do
   withPolicyModule $ \(GitstarPolicyP priv) -> do
     doc <- unlabel ldoc
-    let (Right proj) = fromDocument $ ("owner" -: owner):doc
+    let (Right proj) = fromDocument $ doc
         lbl = labelOf ldoc
     labelP priv (lbl { dcIntegrity = (dcIntegrity lbl) \/ (privDesc priv) }) $
                 proj
 
 partialProjectUpdate :: MonadLIO DCLabel m
-                     => UserName
-                     -> ProjectName
-                     -> DCLabeled Document
+                     => DCLabeled Project
                      -> m (DCLabeled Project)
-partialProjectUpdate uName projName ldoc = liftLIO $
+partialProjectUpdate lproj = liftLIO $
   withPolicyModule $ \(GitstarPolicyP priv) -> do
-    doc <- unlabel ldoc
+    projU <- unlabel lproj
     (Just proj0) <- findWhere $
-      select ["owner" -: uName, "name" -: projName] "projects"
-    let proj = proj0 {
-                  projectDescription = fromMaybe (projectDescription proj0) $ lookup "description" doc
+      select ["owner" -: projectOwner projU, "name" -: projectName projU] "projects"
+    let proj = projU {
+                  projectId = projectId proj0
                 }
-    let lbl0 = labelOf ldoc
+    let lbl0 = labelOf lproj
     let lbl = lbl0 { dcIntegrity = (dcIntegrity lbl0) \/ (privDesc priv) }
     labelP priv lbl proj
 
