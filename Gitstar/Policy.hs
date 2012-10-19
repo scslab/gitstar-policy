@@ -125,29 +125,33 @@ instance DCLabeledRecord GitstarPolicy Project where
 partialUserUpdate :: MonadLIO DCLabel m => UserName -> DCLabeled Document -> m (DCLabeled User)
 partialUserUpdate uName ldoc = liftLIO $ do
   withPolicyModule $ \(GitstarPolicyP priv) -> do
-    doc <- unlabel ldoc
+    doc <- unlabelP priv ldoc
     method <- lookup "_method" doc
     when (method /= ("PUT" :: String)) $ fail "_method must be PUT"
-    user0 <- getOrCreateUser uName
+    luser0 <- getOrCreateLUser uName
+    user0 <- unlabelP priv luser0
     let user = user0 { userFullName = lookup "full_name" doc
                      , userCity = lookup "city" doc
                      , userWebsite = lookup "website" doc
                      , userGravatar = lookup "gravatar" doc }
-    let lbl = (labelOf ldoc) {
-                dcIntegrity = (dcIntegrity lbl) \/ (privDesc priv) }
+    let lbl = lub (labelOf luser0) (labelOf ldoc)
     labelP priv lbl user
 
-getOrCreateUser :: MonadLIO DCLabel m => UserName -> m User
-getOrCreateUser username = liftLIO $ withPolicyModule $ \(GitstarPolicyP priv) -> do
+getOrCreateLUser :: MonadLIO DCLabel m => UserName -> m (DCLabeled User)
+getOrCreateLUser username = liftLIO $ withPolicyModule $ \(GitstarPolicyP priv) -> do
   muser <- (find $ select [ "_id" -: username ] "users") >>= next
   case muser of
     Just luser -> do
-      user <- unlabel luser
-      fromDocument user
+      user <- unlabelP priv luser
+      doc <- fromDocument user
+      labelP priv (labelOf luser) doc
     Nothing -> do
       let user = User username [] [] Nothing Nothing Nothing Nothing
       insertP_ priv "users" (toDocument user)
-      return user
+      label dcPub user
+
+getOrCreateUser :: MonadLIO DCLabel m => UserName -> m User
+getOrCreateUser username = getOrCreateLUser username >>= unlabel
 
 delUserKey :: MonadLIO DCLabel m => UserName -> DCLabeled Document -> m (DCLabeled User)
 delUserKey uName ldoc = liftLIO $ do
@@ -190,14 +194,15 @@ partialProjectUpdate :: MonadLIO DCLabel m
                      -> m (DCLabeled Project)
 partialProjectUpdate lproj = liftLIO $
   withPolicyModule $ \(GitstarPolicyP priv) -> do
-    projU <- unlabel lproj
-    (Just proj0) <- findWhere $
+    projU <- unlabelP priv lproj
+    (Just lprojDoc) <- findOne $
       select ["owner" -: projectOwner projU, "name" -: projectName projU] "projects"
+    proj0 <- unlabelP priv lprojDoc >>= fromDocument
     let proj = projU {
                   projectId = projectId proj0
                 }
     let lbl0 = labelOf lproj
-    let lbl = lbl0 { dcIntegrity = (dcIntegrity lbl0) \/ (privDesc priv) }
+    let lbl = lub (labelOf lprojDoc) lbl0
     labelP priv lbl proj
 
 -- | Given a user name and project ID, associate the project with the
