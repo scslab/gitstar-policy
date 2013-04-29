@@ -23,6 +23,7 @@ import qualified Data.Text as T
 
 import           Hails.Data.Hson
 import           Hails.Database.Structured
+import           Hails.Web
 import           Data.Hex
 
 --
@@ -167,9 +168,6 @@ instance DCRecord GitstarApp where
 --
 -- Users
 --
-
--- | User name is simply  a stirng
-type UserName = Text
 
 -- | Email address of a user
 type Email = Text
