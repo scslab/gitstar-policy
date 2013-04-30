@@ -30,7 +30,6 @@ import Data.Bson.Binary
 import Data.Binary.Get
 import Data.List (isInfixOf)
 import Data.Typeable
-import Data.Maybe (fromMaybe)
 import Hails.Data.Hson
 import Hails.HttpServer
 import Hails.Database
@@ -72,8 +71,8 @@ instance PolicyModule GitstarPolicy where
             in case projectReaders proj of
               Left Public -> anybody
               Right rs ->
-                let writers = map T.unpack $ (projectOwner proj):(rs ++ projectCollaborators proj)
-                in foldl (\/) this writers
+                let rds = map T.unpack $ (projectOwner proj):"gitstar":(rs ++ projectCollaborators proj)
+                in foldl (\/) this rds
           writers ==>
             let (Just proj) = fromDocument doc
             in (T.unpack $ projectOwner proj) \/ this
