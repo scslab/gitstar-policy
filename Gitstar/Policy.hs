@@ -1,7 +1,4 @@
-{-# LANGUAGE CPP #-}
-#if PRODUCTION
-{-# LANGUAGE Safe #-}
-#endif
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE OverloadedStrings, DeriveDataTypeable #-}
 {-# LANGUAGE MultiParamTypeClasses, IncoherentInstances, FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables #-}
@@ -107,6 +104,8 @@ instance PolicyModule GitstarPolicy where
         field "name" searchable
     return $ GitstarPolicyP priv
 
+    where anybody = cTrue
+
 withGitstar :: MonadLIO DCLabel m => DBAction a -> m a
 withGitstar act = liftLIO $ withPolicyModule $ \(_ :: GitstarPolicy) -> act
 
@@ -147,7 +146,7 @@ getOrCreateLUser username = liftLIO $ withPolicyModule $ \(GitstarPolicyP priv) 
     Nothing -> do
       let user = User username [] [] Nothing Nothing Nothing Nothing
       insertP_ priv "users" (toDocument user)
-      liftLIO $ label dcPub user
+      liftLIO $ label dcPublic user
 
 getOrCreateUser :: MonadLIO DCLabel m => UserName -> m User
 getOrCreateUser username = getOrCreateLUser username >>= liftLIO . unlabel

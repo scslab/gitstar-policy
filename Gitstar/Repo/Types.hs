@@ -1,7 +1,4 @@
-{-# LANGUAGE CPP #-}
-#if PRODUCTION
-{-# LANGUAGE Safe #-}
-#endif
+{-# LANGUAGE Trustworthy #-}
 -- | Basic git types. The current interface does not interpret types
 -- such as dates or mime types. Inteface is based on the "git-object"
 -- package.
